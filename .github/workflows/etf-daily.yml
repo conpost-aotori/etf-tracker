@@ -34,10 +34,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Japanese fonts (for X image post)
+      - name: Install Japanese fonts (Noto Sans CJK, from upstream release; for X image post)
+        # apt's fonts-noto-cjk (61 MB) sometimes crawls from the Ubuntu mirror
+        # (6+ min at ~160 kB/s) and the job hits timeout-minutes before it can
+        # post. Fetch the same .ttc files from the pinned upstream release into
+        # the same path apt uses (file paths / family names unchanged).
+        timeout-minutes: 4
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends fonts-noto-cjk
+          set -euo pipefail
+          d=/usr/share/fonts/opentype/noto
+          sudo mkdir -p "$d"
+          base=https://github.com/notofonts/noto-cjk/raw/Sans2.004/Sans/OTC
+          for f in NotoSansCJK-Regular.ttc NotoSansCJK-Bold.ttc; do
+            sudo curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --max-time 120 -o "$d/$f" "$base/$f"
+          done
+          ls -l "$d"
+          sudo fc-cache -f >/dev/null
+          fc-list : family | grep -F "Noto Sans CJK JP" >/dev/null \
+            || { echo "::error::Noto Sans CJK JP not registered"; exit 1; }
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3
